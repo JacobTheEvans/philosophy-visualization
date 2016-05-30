@@ -7,9 +7,17 @@ sys.dont_write_bytecode = True
 import dbase
 
 main_site = "http://philpapers.org/"
+que = []
 
 def scrape_work(url):
-    response = requests.get(url)
+    hasPassed = False
+    while not hasPassed:
+        try:
+            response = requests.get(url)
+            hasPassed = True
+        except:
+            print("[-] Connection Failed Waiting To Retry")
+            time.sleep(5)
     html_content = response.content
     html_doc = BeautifulSoup(html_content)
 
@@ -32,7 +40,14 @@ def scrape_work(url):
     return {"name": name, "citations": cit, "author": auth}
 
 def scrape_branch(url):
-    response = requests.get(url)
+    hasPassed = False
+    while not hasPassed:
+        try:
+            response = requests.get(url)
+            hasPassed = True
+        except:
+            print("[-] Connection Failed Waiting To Retry")
+            time.sleep(5)
     html_content = response.content
     html_doc = BeautifulSoup(html_content)
     branch_elements = html_doc.find_all("a", {"class": "tocCatName catName4"})
@@ -48,33 +63,51 @@ def scrape_branch(url):
     return {"results": results, "branch_name": branch_name}
 
 def scrape_for_works(url):
-        response = requests.get(url)
-        html_content = response.content
-        html_doc = BeautifulSoup(html_content)
-        elements = html_doc.find_all("span", {"class": "citation"})
+    hasPassed = False
+    while not hasPassed:
+        try:
+            response = requests.get(url)
+            hasPassed = True
+        except:
+            print("[-] Connection Failed Waiting To Retry")
+            time.sleep(5)
+    html_content = response.content
+    html_doc = BeautifulSoup(html_content)
+    elements = html_doc.find_all("span", {"class": "citation"})
 
-        results = []
-        for i in elements:
-            results.append(i.find("a")["href"])
-        return results
+    results = []
+    for i in elements:
+        results.append(i.find("a")["href"])
+    return results
 
 def thread_scrape(url):
     print("[+] Scraping sub branch")
     sub_branches = scrape_branch(main_site + url)
     for x in sub_branches["results"]:
         print("[+] Scraping inner branch")
+        time.sleep(0.2)
         inner_branches = scrape_branch(main_site + x)
         for y in inner_branches["results"]:
             print("[+] Scraping for works in inner branch")
+            time.sleep(0.2)
             works = scrape_for_works(main_site + y)
             for t in works:
+                time.sleep(0.5)
                 raw_data = scrape_work(t)
                 isPresent = False
                 for i in dbase.get_works():
                     if i.name == raw_data["name"]:
                         isPresent = True
                 if not isPresent:
-                    dbase.add_work(raw_data["name"], raw_data["author"], inner_branches["branch_name"], raw_data["citations"])
+                    que.append({"name": raw_data["name"], "author": raw_data["author"], "branch_name": inner_branches["branch_name"], "citations": raw_data["citations"]})
+
+def thread_que():
+    while True:
+        if len(que) > 1:
+            dbase.addwork(que[0]["name"], que[0]["author"], que[0]["branch_name"], que[0]["citations"])
+            del que[0]
+        else:
+            time.sleep(1)
 
 def main():
     print("[+] Starting philosophy scraper")
